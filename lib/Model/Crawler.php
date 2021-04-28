@@ -46,7 +46,14 @@ class Crawler
             return;
         }
 
+        $xpath = $this->loadXpath($body);
+
+        if ($xpath === false) {
+            return;
+        }
+
         $this->enqueueLinks($this->loadXpath($body), $ultimateUrl, $report, $queue);
+        $this->enqueueImages($this->loadXpath($body), $ultimateUrl, $report, $queue);
     }
 
     private function enqueueLinks(DOMXPath $xpath, Url $documentUrl, ReportBuilder $report, UrlQueue $queue): void
@@ -61,6 +68,31 @@ class Crawler
 
             try {
                 $url = $documentUrl->resolveUrl($href, ReferringElement::fromDOMNode($linkElement));
+            } catch (InvalidUrl $invalidUrl) {
+                $report->withException($invalidUrl);
+                continue;
+            }
+
+            if (!$url->isHttp()) {
+                continue;
+            }
+
+            $queue->enqueue($url);
+        }
+    }
+
+    private function enqueueImages(DOMXPath $xpath, Url $documentUrl, ReportBuilder $report, UrlQueue $queue): void
+    {
+        foreach ($xpath->query('//img') as $imageElement) {
+            assert($imageElement instanceof DOMElement);
+            $src = $imageElement->getAttribute('src');
+
+            if (!$src) {
+                continue;
+            }
+
+            try {
+                $url = $documentUrl->resolveUrl($src, ReferringElement::fromDOMNode($imageElement));
             } catch (InvalidUrl $invalidUrl) {
                 $report->withException($invalidUrl);
                 continue;
